@@ -47,18 +47,10 @@ jobs:
           rm -f "$RUNNER_TEMP/trae-state.tar"
 
       - name: Run checkin
+        id: checkin
         env:
           TRAE_ACCOUNTS: ${{ secrets.TRAE_ACCOUNTS }}
           TRAE_REFRESH_TOKEN: ${{ secrets.TRAE_REFRESH_TOKEN }}
-          TRAE_REFRESH_TOKEN_2: ${{ secrets.TRAE_REFRESH_TOKEN_2 }}
-          TRAE_REFRESH_TOKEN_3: ${{ secrets.TRAE_REFRESH_TOKEN_3 }}
-          TRAE_REFRESH_TOKEN_4: ${{ secrets.TRAE_REFRESH_TOKEN_4 }}
-          TRAE_REFRESH_TOKEN_5: ${{ secrets.TRAE_REFRESH_TOKEN_5 }}
-          TRAE_REFRESH_TOKEN_6: ${{ secrets.TRAE_REFRESH_TOKEN_6 }}
-          TRAE_REFRESH_TOKEN_7: ${{ secrets.TRAE_REFRESH_TOKEN_7 }}
-          TRAE_REFRESH_TOKEN_8: ${{ secrets.TRAE_REFRESH_TOKEN_8 }}
-          TRAE_REFRESH_TOKEN_9: ${{ secrets.TRAE_REFRESH_TOKEN_9 }}
-          TRAE_ACCESS_TOKEN: ${{ secrets.TRAE_ACCESS_TOKEN }}
           TRAE_DEVICE_KEY_PEM: ${{ secrets.TRAE_DEVICE_KEY_PEM }}
           TRAE_DEVICE_PUB_PEM: ${{ secrets.TRAE_DEVICE_PUB_PEM }}
           TRAE_MACHINE_ID: ${{ secrets.TRAE_MACHINE_ID }}
@@ -81,8 +73,22 @@ jobs:
           WECHAT_WEBHOOK: ${{ secrets.WECHAT_WEBHOOK }}
           PLUSPLUS_TOKEN: ${{ secrets.PLUSPLUS_TOKEN }}
           PLUSHPLUS_TOKEN: ${{ secrets.PLUSHPLUS_TOKEN }}
-          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
-        run: python trae_checkin.py
+        run: |
+          set -o pipefail
+          python trae_checkin.py 2>&1 | tee "$RUNNER_TEMP/trae_out.txt"
+
+      - name: ServerChan notify
+        if: always()
+        env:
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+          CHECK_CONCLUSION: ${{ steps.checkin.conclusion }}
+        run: |
+          OUT="$RUNNER_TEMP/trae_out.txt"
+          if [ "$CHECK_CONCLUSION" = "success" ]; then MARK="✅"; else MARK="⚠️"; fi
+          if [ -s "$OUT" ]; then DESP=$(tail -n 15 "$OUT"); else DESP="Run checkin 步骤无输出"; fi
+          curl -s -X POST "https://sctapi.ftqq.com/${SERVERCHAN_SENDKEY}.send" \
+            --data-urlencode "title=${MARK} Trae 签到" \
+            --data-urlencode "desp=${DESP}" > /dev/null
 
       - name: Encrypt state
         if: ${{ always() && env.TRAE_CACHE_KEY != '' }}
